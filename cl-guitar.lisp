@@ -4,6 +4,9 @@
   "<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">")
 (defconstant +svg-header+ "<?xml version=\"1.0\" standalone=\"yes\"?>~%~%")
 
+(defvar *diagrams* (make-hash-table :test #'equal))
+(defparameter *diagram-dir* (asdf:system-relative-pathname ) #P".")
+
 (defparameter *svg* *standard-output*)
 (defparameter *width* 212)
 (defparameter *height* 395)
@@ -166,37 +169,43 @@
 (defun svg->png (source destination)
   (uiop:run-program (format nil "inkscape -z -e ~a ~a" destination source)))
 
-(defun create-diagram (title num-frets destination notes)
-  (uiop:call-with-temporary-file
-   (lambda (stream path)
-     (let ((*svg* stream))
-       (save-diagram title num-frets notes))
-     (finish-output stream)
-     (svg->png path destination))
-   :direction :output
-   :type "svg"))
+(defclass diagram ()
+  ((id :initarg :id
+       :reader diagram-id)
+   (title :initarg :title)
+   (frets :initarg :frets)
+   (notes :initarg :notes)))
 
-(defmacro defdiagram ((&key title frets output) &body body)
-  `(create-diagram ,title ,frets ,output
-                   (list ,@(loop for note in body
-                              collect `(make-note ',note)))))
+(defun create-diagram (diagram destination)
+  (with-slots (title frets notes) diagram
+    (uiop:call-with-temporary-file
+     (lambda (stream path)
+       (let ((*svg* stream))
+         (save-diagram title frets notes))
+       (finish-output stream)
+       (svg->png path destination))
+     :direction :output
+     :type "svg")))
 
+(defun push-diagram (diagram)
+  (let ((place (gethash (diagram-id diagram) *diagrams*)))
+    (if place
+        (warn "Replacing diagram ~a" (diagram-id diagram)))
+    (setf (gethash (diagram-id diagram) *diagrams*) diagram)))
 
-;; (defdiagram (:title "minMaj7" 
-;;              :frets 6
-;;              :output "out.png")
-;;   (1 6 "R" :dashed)
-;;   (2 1 "R" :dashed)
-;;   (4 4 "R" :dashed)
-;;   (2 4 "b3")
-;;   (3 3 "5")
-;;   (4 3 "7"))
+(defun add-diagram (id title frets notes)
+  (let ((diagram (make-instance 'diagram
+                                :id id
+                                :title title
+                                :frets frets
+                                :notes notes))
+        (output (merge-pathnames *diagram-dir* (format nil "~a.png" id))))
+    (push-diagram diagram)
+    (format t "Saving ~a to ~a" id output)
+    (create-diagram diagram output)))
 
-;; (defdiagram (:title "min6/9" 
-;;                     :frets 6)
-;;   (1 4 "R" :dashed)
-;;   (4 2 "R" :dashed)
-;;   (3 6 "R" :dashed)
-;;   (2 2 "b3")
-;;   (3 3 "6")
-;;   (4 4 "2"))
+(defmacro defdiagram (id (&key title frets) &body body)
+  `(progn
+     (add-diagram ,id ,title ,frets
+                     (list ,@(loop for note in body
+                                   collect `(make-note ',note))))))
