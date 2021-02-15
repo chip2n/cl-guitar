@@ -194,6 +194,9 @@
 
 ;; ---------------------------------------------------------
 
+(defvar *bg-color* "#F9F5ED")
+(defvar *fg-color* "#7B6B52")
+
 (defun emit-svg (tree)
   (when tree
     (if (stringp tree)
@@ -259,35 +262,33 @@
 
 (progn
   (defmacro draw-fretboard-stuff (width height num-frets)
-    (let ((fg-color "#7B6B52")
-          (bg-color "#F9F5ED")
-          (nut-height 13.8647)
+    (let ((nut-height 13.8647)
           (string-width 1.54052)
           (fret-height 1.54052)
           (num-strings 6))
       (alexandria:with-gensyms (fretboard-height)
         `(let ((,fretboard-height (- ,height ,nut-height ,fret-height)))
            (group ()
-                  (rect :width ,width :height ,height :fill ,bg-color)
+                  (rect :width ,width :height ,height :fill ,*bg-color*)
 
                   ;; Draw the nut
                   (rect :width ,width
                         :height ,nut-height
-                        :fill ,fg-color)
+                        :fill ,*fg-color*)
 
                   ;; Draw the strings
                   (loop for s from 0 below ,num-strings
                         do (rect :x (* s (/ (- ,width ,string-width) (float (- ,num-strings 1))))
                                  :width ,string-width
                                  :height ,height
-                                 :fill ,fg-color))
+                                 :fill ,*fg-color*))
 
                   ;; Draw the frets
                   (loop for s from 0 below ,num-frets
                         do (rect :y (+ ,nut-height (* (+ s 1) (/ ,fretboard-height (float ,num-frets))))
                                  :width ,width
                                  :height ,fret-height
-                                 :fill ,fg-color)))))))
+                                 :fill ,*fg-color*)))))))
 
   (defun draw-diagram (&key width height num-frets)
     (svg (:width width :height height)
