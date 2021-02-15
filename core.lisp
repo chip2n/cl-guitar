@@ -182,8 +182,15 @@
                  (list ,@(loop for note in body
                                collect `(make-note ',note)))))
 
+(defmacro diagram ((&key title (count 4) (start 0) indicator) &body body)
+  `(save-diagram
+    ,title
+    ,count
+    (list ,@(loop :for note :in body :collect `(make-note ',note)))))
 
-;; ----
+
+
+;; ---------------------------------------------------------
 
 
 (defun emit-svg (tree)
@@ -200,167 +207,62 @@
             (emit-svg form))
           (format *svg* "</~a>" tag)))))
 
-(defmacro diagram ((&key title (count 4) (start 0) indicator) &body body)
-  `(save-diagram
-    ,title
-    ,count
-    (list ,@(loop :for note :in body :collect `(make-note ',note)))))
+(defmacro compile-ast (&body body)
+  `(let ((cmds nil))
+     (macrolet ((rect (&key width height fill)
+                  `(push `(:rect ,,width ,,height ,,fill) cmds))
+                (text (s &key (x 0) (y 0) fill)
+                  `(push `(:text ,,s ,,x ,,y ,,fill) cmds))
+                (offset ((&key (x 0) (y 0)) &body body)
+                  `(push `(:offset (:x ,,x :y ,,y) ,(compile-ast ,@body)) cmds)))
+       ,@body
+       (nreverse cmds))))
 
 (defmacro svg ((&key width height) &body body)
-  `(let ((tree (list ,@body)))
-     (emit-svg
-      `(:svg (:xmlns "http://www.w3.org/2000/svg"
-             :|xmlns:xlink| "http://www.w3.org/1999/xlink"
-             :width ,,width
-             :height ,,height
-             :version "1.1")
-        ,@tree))))
+  `(emit-svg (ast->svg ,width ,height (compile-ast ,@body))))
 
-(defun rect (&key width height fill)
-  `(:rect (:width ,width
-           :height ,height
-           :fill ,fill)))
+(defun rect->svg (width height fill)
+  `(:rect (:width ,width :height ,height :fill ,fill)))
 
-(defun text (s &key x y color)
+(defun text->svg (s x y fill)
   `(:text (:x ,x
            :y ,y
            :font-family "Noto Sans"
            :font-size 14
            :font-weight "bold"
            :text-anchor "middle"
-           :fill ,color
+           :fill ,fill
            :dominant-baseline "central")
           ,s))
 
-(defmacro offset ((&key (x 0) (y 0)) &body body)
-  (alexandria:with-gensyms (gx gy)
-    `(let ((,gx ,x)
-           (,gy ,y))
-      `(:g (:transform ,(format nil "translate(~a ~a)" ,gx ,gy))
-           ,,@body))))
+(defun offset->svg (attrs tree)
+  (destructuring-bind (&key x y) attrs
+    `(:g (:transform ,(format nil "translate(~a ~a)" x y))
+         ,@(mapcar #'node->svg tree))))
+
+(defun node->svg (node)
+  (ecase (car node)
+    (:rect (apply #'rect->svg (cdr node)))
+    (:text (apply #'text->svg (cdr node)))
+    (:offset (offset->svg (cadr node) (caddr node)))))
+
+(defun ast->svg (width height tree)
+  `(:svg (:xmlns "http://www.w3.org/2000/svg"
+          :|xmlns:xlink| "http://www.w3.org/1999/xlink"
+          :width ,width
+          :height ,height
+          :version "1.1")
+     ,@(mapcar #'node->svg tree)))
 
 #+nil
 (c:dump-output (s "/tmp/diagram.html")
   (let ((*svg* s))
     (svg (:width 200 :height 200)
-      (rect :width 100 :height 100)
-      (text "hello" :x 10 :y 10 :color "#0000ff")
+      (rect :width 100 :height 100 :fill "#0000ff")
+      (text "hello" :x 20 :y 20 :fill "#ff0000")
 
       (offset (:x 40 :y 40)
-        (text "hello2" :x 0 :y 0 :color "#0000ff"))
+              (text "hello2" :x 0 :y 0 :fill "#00ff00"))
 
-      ;; TODO handle list of lists
       (loop for x from 0 below 6
-            collect (rect :width 2 :height 100 :fill "#ff0000"))
-
-      ;; `(:g (:transform ,(format nil "translate(~a ~a)" 40 40))
-      ;;     ,(text "hello2" :x 0 :y 0 :color "#0000ff"))
-      )))
-
-
-
-
-;; (with-open-file (s "/tmp/diagram.html" :direction :output
-;;                                       :if-does-not-exist :create
-;;                                       :if-exists :supersede)
-;;   (let ((*svg* s))
-;;     (diagram (:title "Amin chord"
-;;               :Start 0
-;;               :count 4
-;;               :indicator 5)
-;;       (6 0 nil :muted)
-;;       (5 0 "R")
-;;       (4 2 "5")
-;;       (3 2 "R")
-;;       (2 1 "b3")
-;;       (1 0 "5"))))
-
-;; (with-open-file (s "/tmp/diagram.html" :direction :output
-;;                                        :if-does-not-exist :create
-;;                                        :if-exists :supersede)
-;;   (let ((*svg* s)
-;;         (img-width 200)
-;;         (img-height 200)
-;;         (bg-color "#ff0000")
-;;         (fg-color "#00ff00")
-;;         (title "hello"))
-;;     (svg (:width img-width :height img-height)
-
-;;       (rect :width img-width
-;;             :height img-height
-;;             :fill "#003300")
-
-;;       ;; (who:htm
-;;       ;;   (:rect :width img-width
-;;       ;;         :height img-height
-;;       ;;          :fill bg-color))
-
-;;          (:text :x (/ img-width 2.0)
-;;                 :y 20
-;;                 :font-family "Noto Sans"
-;;                 :font-size 14
-;;                 :font-weight "bold"
-;;                 :text-anchor "middle"
-;;                 :fill fg-color
-;;                 :dominant-baseline "central"
-;;                 (who:str title))
-;;          ;; (:g :transform (format nil "translate(~a ~a)" padding padding)
-
-;;          ;;     (:rect :width width
-;;          ;;            :height nut-height
-;;          ;;            :fill fg-color)
-
-
-
-
-
-
-
-
-;;          ;;     )
-;;       )))
-
-
-
-
-;; (defmacro svg ((&key width height) &body body)
-;;   `(who:with-html-output (*svg* nil :indent T)
-;;      (:svg
-;;       :xmlns "http://www.w3.org/2000/svg"
-;;       :|xmlns:xlink| "http://www.w3.org/1999/xlink"
-;;       :width ,width
-;;       :height ,height
-;;       :version "1.1"
-;;       ,@body)))
-
-;; (defun svg->png (source destination) ||#
-;;   (uiop:run-program (format nil "inkscape -z -e ~a ~a" destination source))) ||#
-
-;; (defun create-diagram (title num-frets destination notes) ||#
-;;   (uiop:call-with-temporary-file ||#
-;;    (lambda (stream path) ||#
-;;      (let ((*svg* stream)) ||#
-;;        (save-diagram title num-frets notes)) ||#
-;;      (finish-output stream) ||#
-;;      (svg->png path destination)) ||#
-;;    :direction :output ||#
-;;    :type "svg")) ||#
-
-
-;; (defdiagram (:title "minMaj7"  ||#
-;;              :frets 6) ||#
-;;   (1 6 "R" :dashed) ||#
-;;   (2 1 "R" :dashed) ||#
-;;   (4 4 "R" :dashed) ||#
-;;   (2 4 "b3") ||#
-;;   (3 3 "5") ||#
-;;   (4 3 "7")) ||#
-
-;; (defdiagram (:title "min6/9" 
-;;                     :frets 6)
-;;   (1 4 "R" :dashed)
-;;   (4 2 "R" :dashed)
-;;   (3 6 "R" :dashed)
-;;   (2 2 "b3")
-;;   (3 3 "6")
-;;   (4 4 "2"))
+            do (rect :width 1 :height 100)))))
