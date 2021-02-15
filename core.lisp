@@ -259,77 +259,40 @@
 
 (progn
   (defmacro draw-fretboard-stuff (width height num-frets)
-    (let* ((padding 32)
-           (img-height (+ height padding padding))
-           (img-width (+ width padding padding))
-           (fg-color "#7B6B52")
-           (bg-color "#F9F5ED")
-           (nut-height 13.8647)
-           (string-width 1.54052)
-           (fret-height 1.54052)
-           (num-strings 6)
-           (fretboard-height (- height nut-height fret-height))
-           (fret-space (/ fretboard-height (float num-frets))))
-      `(group ()
-              (rect :width ,width :height ,height :fill ,bg-color)
+    (let ((fg-color "#7B6B52")
+          (bg-color "#F9F5ED")
+          (nut-height 13.8647)
+          (string-width 1.54052)
+          (fret-height 1.54052)
+          (num-strings 6))
+      (alexandria:with-gensyms (fretboard-height)
+        `(let ((,fretboard-height (- ,height ,nut-height ,fret-height)))
+           (group ()
+                  (rect :width ,width :height ,height :fill ,bg-color)
 
-              ;; Draw the nut
-              (rect :width ,width
-                    :height ,nut-height
-                    :fill ,fg-color)
+                  ;; Draw the nut
+                  (rect :width ,width
+                        :height ,nut-height
+                        :fill ,fg-color)
 
-              ;; Draw the strings
-              (loop for s from 0 below ,num-strings
-                    do (rect :x (* s (/ (- ,width ,string-width) (float (- ,num-strings 1))))
-                             :width ,string-width
-                             :height ,height
-                             :fill ,fg-color))
+                  ;; Draw the strings
+                  (loop for s from 0 below ,num-strings
+                        do (rect :x (* s (/ (- ,width ,string-width) (float (- ,num-strings 1))))
+                                 :width ,string-width
+                                 :height ,height
+                                 :fill ,fg-color))
 
-              ;; Draw the frets
-              (loop for s from 0 below ,num-frets
-                    do (rect :y (+ ,nut-height (* (+ s 1) (/ ,fretboard-height (float ,num-frets))))
-                             :width ,width
-                             :height ,fret-height
-                             :fill ,fg-color)))))
+                  ;; Draw the frets
+                  (loop for s from 0 below ,num-frets
+                        do (rect :y (+ ,nut-height (* (+ s 1) (/ ,fretboard-height (float ,num-frets))))
+                                 :width ,width
+                                 :height ,fret-height
+                                 :fill ,fg-color)))))))
 
   (defun draw-diagram (&key width height num-frets)
-    (let* ((width *width*)
-           (height *height*)
-           (padding 32)
-           (img-height (+ height padding padding))
-           (img-width (+ width padding padding))
-           (fg-color "#7B6B52")
-           (bg-color "#F9F5ED")
-           (nut-height 13.8647)
-           (string-width 1.54052)
-           (fret-height 1.54052)
-           (num-strings 6)
-           (fretboard-height (- height nut-height fret-height))
-           (fret-space (/ fretboard-height (float num-frets))))
-      (svg (:width width :height height)
-        ;; (draw-fretboard-stuff width height num-frets)
-        (group ()
-               (rect :width width :height height :fill bg-color)
-
-               ;; Draw the nut
-               (rect :width width
-                     :height nut-height
-                     :fill fg-color)
-
-               ;; Draw the strings
-               (loop for s from 0 below num-strings
-                     do (rect :x (* s (/ (- width string-width) (float (- num-strings 1))))
-                              :width string-width
-                              :height height
-                              :fill fg-color))
-
-               ;; Draw the frets
-               (loop for s from 0 below num-frets
-                     do (rect :y (+ nut-height (* (+ s 1) (/ fretboard-height (float num-frets))))
-                              :width width
-                              :height fret-height
-                              :fill fg-color)))
-        (draw-text-stuff))))
+    (svg (:width width :height height)
+      (draw-fretboard-stuff width height num-frets)
+      (draw-text-stuff)))
 
   (defmacro draw-text-stuff ()
     `(group ()
