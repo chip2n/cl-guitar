@@ -1,5 +1,7 @@
 (in-package #:cl-guitar)
 
+;; TODO remove cl-who
+
 (alexandria:define-constant +svg-doctype+
   "<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">"
   :test #'string=)
@@ -192,7 +194,6 @@
 
 ;; ---------------------------------------------------------
 
-
 (defun emit-svg (tree)
   (when tree
     (if (stringp tree)
@@ -208,21 +209,22 @@
           (format *svg* "</~a>" tag)))))
 
 (defmacro compile-ast (&body body)
-  `(let ((cmds nil))
-     (macrolet ((rect (&key width height fill)
-                  `(push `(:rect ,,width ,,height ,,fill) cmds))
-                (text (s &key (x 0) (y 0) fill)
-                  `(push `(:text ,,s ,,x ,,y ,,fill) cmds))
-                (offset ((&key (x 0) (y 0)) &body body)
-                  `(push `(:offset (:x ,,x :y ,,y) ,(compile-ast ,@body)) cmds)))
-       ,@body
-       (nreverse cmds))))
+  (alexandria:with-gensyms (cmds)
+    `(let ((,cmds nil))
+       (macrolet ((rect (&key (x 0) (y 0) width height fill)
+                    `(push `(:rect ,,x ,,y ,,width ,,height ,,fill) ,',cmds))
+                  (text (s &key (x 0) (y 0) fill)
+                    `(push `(:text ,,s ,,x ,,y ,,fill) ,',cmds))
+                  (group ((&key (x 0) (y 0)) &body body)
+                    `(push `(:group (:x ,,x :y ,,y) ,(compile-ast ,@body)) ,',cmds)))
+         ,@body
+         (nreverse ,cmds)))))
 
 (defmacro svg ((&key width height) &body body)
   `(emit-svg (ast->svg ,width ,height (compile-ast ,@body))))
 
-(defun rect->svg (width height fill)
-  `(:rect (:width ,width :height ,height :fill ,fill)))
+(defun rect->svg (x y width height fill)
+  `(:rect (:x ,x :y ,y :width ,width :height ,height :fill ,fill)))
 
 (defun text->svg (s x y fill)
   `(:text (:x ,x
@@ -235,7 +237,7 @@
            :dominant-baseline "central")
           ,s))
 
-(defun offset->svg (attrs tree)
+(defun group->svg (attrs tree)
   (destructuring-bind (&key x y) attrs
     `(:g (:transform ,(format nil "translate(~a ~a)" x y))
          ,@(mapcar #'node->svg tree))))
@@ -244,25 +246,95 @@
   (ecase (car node)
     (:rect (apply #'rect->svg (cdr node)))
     (:text (apply #'text->svg (cdr node)))
-    (:offset (offset->svg (cadr node) (caddr node)))))
+    (:group (group->svg (cadr node) (caddr node)))))
 
 (defun ast->svg (width height tree)
-  `(:svg (:xmlns "http://www.w3.org/2000/svg"
-          :|xmlns:xlink| "http://www.w3.org/1999/xlink"
-          :width ,width
-          :height ,height
-          :version "1.1")
-     ,@(mapcar #'node->svg tree)))
+  (let ((data (mapcar #'node->svg tree)))
+    `(:svg (:xmlns "http://www.w3.org/2000/svg"
+            :|xmlns:xlink| "http://www.w3.org/1999/xlink"
+            :width ,width
+            :height ,height
+            :version "1.1")
+       ,@data)))
 
-#+nil
-(c:dump-output (s "/tmp/diagram.html")
-  (let ((*svg* s))
-    (svg (:width 200 :height 200)
-      (rect :width 100 :height 100 :fill "#0000ff")
-      (text "hello" :x 20 :y 20 :fill "#ff0000")
+(progn
+  (defmacro draw-fretboard-stuff (width height num-frets)
+    (let* ((padding 32)
+           (img-height (+ height padding padding))
+           (img-width (+ width padding padding))
+           (fg-color "#7B6B52")
+           (bg-color "#F9F5ED")
+           (nut-height 13.8647)
+           (string-width 1.54052)
+           (fret-height 1.54052)
+           (num-strings 6)
+           (fretboard-height (- height nut-height fret-height))
+           (fret-space (/ fretboard-height (float num-frets))))
+      `(group ()
+              (rect :width ,width :height ,height :fill ,bg-color)
 
-      (offset (:x 40 :y 40)
-              (text "hello2" :x 0 :y 0 :fill "#00ff00"))
+              ;; Draw the nut
+              (rect :width ,width
+                    :height ,nut-height
+                    :fill ,fg-color)
 
-      (loop for x from 0 below 6
-            do (rect :width 1 :height 100)))))
+              ;; Draw the strings
+              (loop for s from 0 below ,num-strings
+                    do (rect :x (* s (/ (- ,width ,string-width) (float (- ,num-strings 1))))
+                             :width ,string-width
+                             :height ,height
+                             :fill ,fg-color))
+
+              ;; Draw the frets
+              (loop for s from 0 below ,num-frets
+                    do (rect :y (+ ,nut-height (* (+ s 1) (/ ,fretboard-height (float ,num-frets))))
+                             :width ,width
+                             :height ,fret-height
+                             :fill ,fg-color)))))
+
+  (defun draw-diagram (&key width height num-frets)
+    (let* ((width *width*)
+           (height *height*)
+           (padding 32)
+           (img-height (+ height padding padding))
+           (img-width (+ width padding padding))
+           (fg-color "#7B6B52")
+           (bg-color "#F9F5ED")
+           (nut-height 13.8647)
+           (string-width 1.54052)
+           (fret-height 1.54052)
+           (num-strings 6)
+           (fretboard-height (- height nut-height fret-height))
+           (fret-space (/ fretboard-height (float num-frets))))
+      (svg (:width width :height height)
+        ;; (draw-fretboard-stuff width height num-frets)
+        (group ()
+               (rect :width width :height height :fill bg-color)
+
+               ;; Draw the nut
+               (rect :width width
+                     :height nut-height
+                     :fill fg-color)
+
+               ;; Draw the strings
+               (loop for s from 0 below num-strings
+                     do (rect :x (* s (/ (- width string-width) (float (- num-strings 1))))
+                              :width string-width
+                              :height height
+                              :fill fg-color))
+
+               ;; Draw the frets
+               (loop for s from 0 below num-frets
+                     do (rect :y (+ nut-height (* (+ s 1) (/ fretboard-height (float num-frets))))
+                              :width width
+                              :height fret-height
+                              :fill fg-color)))
+        (draw-text-stuff))))
+
+  (defmacro draw-text-stuff ()
+    `(group ()
+            (rect :width 50 :height 50 :fill "#00ff00")))
+
+  (c:dump-output (s "/tmp/diagram.html")
+    (let ((*svg* s))
+      (draw-diagram :width *width* :height *height* :num-frets 5))))
