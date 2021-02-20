@@ -88,51 +88,108 @@
          ,@(mapcar (lambda (form) `(push ,form ,cmds)) body)
          (nreverse ,cmds)))))
 
+(defmacro inset ((dx dy &optional (anchor :center)) &body body)
+  (alexandria:with-gensyms (gdx gdy)
+    ;; (let ((group-attr (ecase anchor
+    ;;                     (:center (:x (/ ,gdx 2) :y (/ ,gdy 2)))
+    ;;                     (:top (:x (/ ,gdx 2) :y 0))))))
+    (let ((group-args
+            (ecase anchor
+              (:center `(:x (/ ,gdx 2) :y (/ ,gdy 2)))
+              (:bottom `(:x (/ ,gdx 2) :y ,gdy)))))
+      `(let* ((,gdx ,dx)
+              (,gdy ,dy)
+              (*width* (- *width* ,gdx))
+              (*height* (- *height* ,gdy)))
+         (group ,group-args ,@body)))))
+
 ;; guitar specific stuff -------
 
-(defun fretboard (width height num-frets)
-  (let* ((nut-height 13.8647)
-         (string-width 1.54052)
-         (fret-height 1.54052)
-         (num-strings 6)
-         (fretboard-height (- height nut-height fret-height)))
-    (svg
-      ;; Draw the nut
-      (rect :width width
-            :height nut-height
-            :fill *fg-color*)
+(progn
+  (defun fretboard (num-frets)
+    (let* ((nut-height 13.8647)
+           (string-width 1.54052)
+           (fret-height 1.54052)
+           (num-strings 6))
+      (svg
+        ;; Draw the nut
+        (rect :width *width*
+              :height nut-height
+              :fill *fg-color*)
 
-      ;; Draw the strings
-      (loop for s from 0 below num-strings
-            collect (rect :x (* s (/ (- width string-width) (float (- num-strings 1))))
-                          :width string-width
-                          :height height
-                          :fill *fg-color*))
+        (inset (0 nut-height :bottom)
 
-      ;; Draw the frets
-      (loop for s from 0 below num-frets
-            collect (rect :y (+ nut-height (* (+ s 1) (/ fretboard-height (float num-frets))))
-                          :width width
-                          :height fret-height
-                          :fill *fg-color*)))))
+          ;; Draw the strings
+          (loop for s from 0 below num-strings
+                collect (rect :x (* s (/ (- *width* string-width) (float (- num-strings 1))))
+                              :width string-width
+                              :height *height*
+                              :fill *fg-color*))
 
-(defun guitar-diagram (&key title (num-frets 5))
-  (svg
-    ;; Draw background
-    (rect :width *width* :height *height* :fill *bg-color*)
+          ;; Draw the frets
+          (loop for s from 0 below num-frets
+                collect (rect :y (* (+ s 1) (/ *height* (float num-frets)))
+                              :width *width*
+                              :height fret-height
+                              :fill *fg-color*))))))
 
-    ;; Draw title
-    (when title
-      (text title :x (/ *width* 2) :y 12.5 :fill *fg-color*))
+  (defun guitar-diagram (&key title (num-frets 5) (num-strings 6) notes)
+    (let* ((note-radius 16)
+           (padding (+ (* note-radius 2) 8)))
+      (multiple-value-bind (open-notes fretted-notes)
+          (serapeum:partition (lambda (x) (eq (cadr x) 0)) notes)
+        (svg
+          ;; Draw background
+          (rect :width *width* :height *height* :fill *bg-color*)
 
-    (group (:x 25 :y 25)
-           (fretboard
-            (- *width* 50)
-            (- *height* 50)
-            num-frets))))
+          ;; Draw title
+          (when title
+            (text title :x (/ *width* 2) :y (- *height* (/ padding 2)) :fill *fg-color*))
 
-(c:dump-output (s "/tmp/diagram.html")
-  (let ((*svg* s)
-        (*width* 312)
-        (*height* 395))
-    (compile-svg (guitar-diagram :title "Hello" :num-frets 5))))
+          (inset ((* padding 2) 0)
+            (loop for note in open-notes
+                  collect (let* ((string-index (car note))
+                                 (fret-index (cadr note))
+                                 (fret-space (/ *height* (float num-frets)))
+                                 (note-x (* (- num-strings string-index)
+                                            (/ *width* (float (- num-strings 1)))))
+                                 (note-y (/ padding 2))
+                                 (type :circle)
+                                 (note-label (caddr note)))
+                            (group (:x 0 :y 0)
+                                   (circle :x note-x :y note-y :radius note-radius :fill "#ff0000")
+                                   (text note-label :x note-x :y note-y :fill "#ffffff"))))
+
+            (inset (0 (* padding 2) :center)
+              (fretboard num-frets)
+
+              ;; TODO nut height constant
+              (inset (0 13.8647 :bottom)
+
+                (loop for note in fretted-notes
+                      collect (let* ((string-index (car note))
+                                     (fret-index (cadr note))
+                                     (fret-space (/ *height* (float num-frets)))
+                                     (note-x (* (- num-strings string-index)
+                                                (/ *width* (float (- num-strings 1)))))
+                                     (note-y (- (* fret-index fret-space)
+                                                (/ fret-space 2)))
+                                     (type :circle)
+                                     (note-label (caddr note)))
+                                (group (:x 0 :y 0)
+                                       (circle :x note-x :y note-y :radius note-radius :fill "#ff0000")
+                                       (text note-label :x note-x :y note-y :fill "#ffffff")))))))))))
+
+  (c:dump-output (s "/tmp/diagram.html")
+    (let ((*svg* s)
+          (*width* 280)
+          (*height* 400)
+          (notes '((5 0 "R")
+                   (4 2 "5")
+                   (3 2 "R")
+                   (2 1 "b3")))
+          ;; (notes '((5 0 "R")
+          ;;          (5 1 "R")
+          ;;          (5 2 "R")))
+          )
+      (compile-svg (guitar-diagram :title "A minor (open)" :num-frets 5 :notes notes)))))

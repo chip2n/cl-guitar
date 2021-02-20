@@ -4,6 +4,6 @@
   :license  "MIT"
   :version "0.0.1"
   :serial t
-  :depends-on (#:cl-who #:alexandria #:chiputils #:arrow-macros)
+  :depends-on (#:cl-who #:alexandria #:chiputils #:arrow-macros #:serapeum)
   :components ((:file "package")
                (:file "core")))
