@@ -24,14 +24,15 @@
 (defun rect->svg (x y width height fill)
   `(:rect (:x ,x :y ,y :width ,width :height ,height :fill ,fill)))
 
-(defun circle->svg (x y r fill stroke stroke-width)
+(defun circle->svg (x y r fill stroke stroke-width &optional dashedp)
   `(:circle (:cx ,x
              :cy ,y
              :r ,r
              :fill ,fill
              :stroke ,stroke
              :stroke-width ,stroke-width
-             :stroke-dasharray "4,4")))
+             ,@(when dashedp
+                 '(:stroke-dasharray "4,4")))))
 
 (defun line->svg (x1 y1 x2 y2 stroke stroke-width)
   `(:line (:x1 ,x1
@@ -45,7 +46,7 @@
   `(:text (:x ,x
            :y ,y
            :font-family "Noto Sans"
-           :font-size 14
+           :font-size 18
            :font-weight "bold"
            :text-anchor "middle"
            :fill ,fill
@@ -71,8 +72,7 @@
   (let ((data (mapcar #'node->svg tree)))
     `(:svg (:xmlns "http://www.w3.org/2000/svg"
             :|xmlns:xlink| "http://www.w3.org/1999/xlink"
-            :width ,width
-            :height ,height
+            :viewBox ,(format nil "0 0 ~a ~a" width height)
             :version "1.1")
        ,@data)))
 
@@ -86,8 +86,8 @@
     `(let ((,cmds nil))
        (macrolet ((rect (&key (x 0) (y 0) width height fill)
                     `(list :rect ,x ,y ,width ,height ,fill))
-                  (circle (&key (x 0) (y 0) radius fill stroke (stroke-width 0))
-                    `(list :circle ,x ,y ,radius ,fill ,stroke ,stroke-width))
+                  (circle (&key (x 0) (y 0) radius fill stroke (stroke-width 0) dashedp)
+                    `(list :circle ,x ,y ,radius ,fill ,stroke ,stroke-width ,dashedp))
                   (line (&key (x1 0) (y1 0) (x2 0) (y2 0) stroke (stroke-width 1))
                     `(list :line ,x1 ,y1 ,x2 ,y2 ,stroke ,stroke-width))
                   (text (s &key (x 0) (y 0) fill)
@@ -119,8 +119,8 @@
        (compile-svg (guitar-diagram :title ,title :num-frets ,frets :notes ',notes))))
 
   (defun fretboard (num-frets)
-    (let* ((nut-height 13.8647)
-           (string-width 1.54052)
+    (let* ((nut-height 16)
+           (string-width 2)
            (fret-height 1.54052)
            (num-strings 6))
       (svg
@@ -166,8 +166,11 @@
       (:filled (svg
                  (circle :x x :y y :radius radius :fill *fg-color* :stroke *bg-color*)
                  (text (note-label note) :x x :y y :fill *bg-color*)))
+      (:stroked (svg
+                  (circle :x x :y y :radius radius :fill *bg-color* :stroke *fg-color* :stroke-width 2)
+                  (text (note-label note) :x x :y y :fill *fg-color*)))
       (:dashed (svg
-                 (circle :x x :y y :radius radius :fill *bg-color* :stroke *fg-color* :stroke-width 2)
+                 (circle :x x :y y :radius radius :fill *bg-color* :stroke *fg-color* :stroke-width 2 :dashedp t)
                  (text (note-label note) :x x :y y :fill *fg-color*)))
       (:muted (svg
                 (group (:x x :y y :rotation 45)
@@ -177,7 +180,7 @@
   (defun guitar-diagram (&key title (num-frets 5) (num-strings 6) notes)
     (let* ((note-radius 16)
            (padding (+ (* note-radius 2) 8))
-           (nut-height 13.8647))
+           (nut-height 16))
       (flet ((calc-note-coords (note)
                (let* ((string-index (note-string note))
                       (fret-index (note-fret note))
