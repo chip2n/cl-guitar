@@ -33,6 +33,14 @@
              :stroke-width ,stroke-width
              :stroke-dasharray "4,4")))
 
+(defun line->svg (x1 y1 x2 y2 stroke stroke-width)
+  `(:line (:x1 ,x1
+           :y1 ,y1
+           :x2 ,x2
+           :y2 ,y2
+           :stroke ,stroke
+           :stroke-width ,stroke-width)))
+
 (defun text->svg (s x y fill)
   `(:text (:x ,x
            :y ,y
@@ -45,16 +53,17 @@
           ,s))
 
 (defun group->svg (attrs tree)
-  (destructuring-bind (&key x y) attrs
-    `(:g (:transform ,(format nil "translate(~a ~a)" x y))
+  (destructuring-bind (&key x y rotation) attrs
+    `(:g (:transform ,(format nil "translate(~a ~a) rotate(~a)" x y rotation))
          ,@(mapcar #'node->svg tree))))
 
 (defun node->svg (node)
   (if (listp (car node))
-      (group->svg '(:x 0 :y 0) node)
+      (group->svg '(:x 0 :y 0 :rotation 0) node)
       (ecase (car node)
         (:rect (apply #'rect->svg (cdr node)))
         (:circle (apply #'circle->svg (cdr node)))
+        (:line (apply #'line->svg (cdr node)))
         (:text (apply #'text->svg (cdr node)))
         (:group (group->svg (cadr node) (caddr node))))))
 
@@ -79,10 +88,12 @@
                     `(list :rect ,x ,y ,width ,height ,fill))
                   (circle (&key (x 0) (y 0) radius fill stroke (stroke-width 0))
                     `(list :circle ,x ,y ,radius ,fill ,stroke ,stroke-width))
+                  (line (&key (x1 0) (y1 0) (x2 0) (y2 0) stroke (stroke-width 1))
+                    `(list :line ,x1 ,y1 ,x2 ,y2 ,stroke ,stroke-width))
                   (text (s &key (x 0) (y 0) fill)
                     `(list :text ,s ,x ,y ,fill))
-                  (group ((&key (x 0) (y 0)) &body body)
-                    `(list :group (list :x ,x :y ,y) (list ,@body))))
+                  (group ((&key (x 0) (y 0) (rotation 0)) &body body)
+                    `(list :group (list :x ,x :y ,y :rotation ,rotation) (list ,@body))))
          ,@(mapcar (lambda (form) `(push ,form ,cmds)) body)
          (nreverse ,cmds)))))
 
@@ -143,11 +154,15 @@
   (defun note (x y radius note)
     (ecase (note-style note)
       (:filled (svg
-                  (circle :x x :y y :radius radius :fill *fg-color* :stroke *bg-color*)
-                  (text (note-label note) :x x :y y :fill *bg-color*)))
+                 (circle :x x :y y :radius radius :fill *fg-color* :stroke *bg-color*)
+                 (text (note-label note) :x x :y y :fill *bg-color*)))
       (:dashed (svg
-                  (circle :x x :y y :radius radius :fill *bg-color* :stroke *fg-color* :stroke-width 2)
-                  (text (note-label note) :x x :y y :fill *fg-color*)))))
+                 (circle :x x :y y :radius radius :fill *bg-color* :stroke *fg-color* :stroke-width 2)
+                 (text (note-label note) :x x :y y :fill *fg-color*)))
+      (:muted (svg
+                (group (:x x :y y :rotation 45)
+                       (line :x1 0 :y1 (- 0 radius) :x2 0 :y2 (+ 0 radius) :stroke *fg-color* :stroke-width 2)
+                       (line :x1 (- 0 radius) :y1 0 :x2 (+ 0 radius) :y2 0 :stroke *fg-color* :stroke-width 2))))))
 
   (defun guitar-diagram (&key title (num-frets 5) (num-strings 6) notes)
     (let* ((note-radius 16)
@@ -192,6 +207,7 @@
   (c:dump-output (s "/tmp/diagram.html")
     (let ((*svg* s))
       (diagram (:title "A minor (open)" :frets 5)
+        (1 0 "R" :muted)
         (5 0 "R" :dashed)
         (4 2 "5")
         (3 2 "R")
