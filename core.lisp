@@ -24,6 +24,15 @@
 (defun rect->svg (x y width height fill)
   `(:rect (:x ,x :y ,y :width ,width :height ,height :fill ,fill)))
 
+(defun circle->svg (x y r fill stroke stroke-width)
+  `(:circle (:cx ,x
+             :cy ,y
+             :r ,r
+             :fill ,fill
+             :stroke ,stroke
+             :stroke-width ,stroke-width
+             :stroke-dasharray "4,4")))
+
 (defun text->svg (s x y fill)
   `(:text (:x ,x
            :y ,y
@@ -45,6 +54,7 @@
       (group->svg '(:x 0 :y 0) node)
       (ecase (car node)
         (:rect (apply #'rect->svg (cdr node)))
+        (:circle (apply #'circle->svg (cdr node)))
         (:text (apply #'text->svg (cdr node)))
         (:group (group->svg (cadr node) (caddr node))))))
 
@@ -69,6 +79,8 @@
     `(let ((,cmds nil))
        (macrolet ((rect (&key (x 0) (y 0) width height fill)
                     `(list :rect ,x ,y ,width ,height ,fill))
+                  (circle (&key (x 0) (y 0) radius fill stroke (stroke-width 0))
+                    `(list :circle ,x ,y ,radius ,fill ,stroke ,stroke-width))
                   (text (s &key (x 0) (y 0) fill)
                     `(list :text ,s ,x ,y ,fill))
                   (group ((&key (x 0) (y 0)) &body body)
