@@ -1,6 +1,6 @@
 (in-package #:cl-guitar)
 
-(defvar *svg* *standard-output*)
+(defvar *svg* nil)
 (defvar *bg-color* "#F9F5ED")
 (defvar *fg-color* "#7B6B52")
 
@@ -72,8 +72,6 @@
     (ast->svg *width* *height*)
     (emit-svg)))
 
-;; --------------
-
 (defmacro svg (&body body)
   (alexandria:with-gensyms (cmds)
     `(let ((,cmds nil))
@@ -90,9 +88,6 @@
 
 (defmacro inset ((dx dy &optional (anchor :center)) &body body)
   (alexandria:with-gensyms (gdx gdy)
-    ;; (let ((group-attr (ecase anchor
-    ;;                     (:center (:x (/ ,gdx 2) :y (/ ,gdy 2)))
-    ;;                     (:top (:x (/ ,gdx 2) :y 0))))))
     (let ((group-args
             (ecase anchor
               (:center `(:x (/ ,gdx 2) :y (/ ,gdy 2)))
@@ -106,6 +101,12 @@
 ;; guitar specific stuff -------
 
 (progn
+  (defmacro diagram ((&key title frets) &body notes)
+    `(let ((*svg* (or *svg* *standard-output*))
+           (*width* 280)
+           (*height* 400))
+       (compile-svg (guitar-diagram :title ,title :num-frets ,frets :notes ',notes))))
+
   (defun fretboard (num-frets)
     (let* ((nut-height 13.8647)
            (string-width 1.54052)
@@ -136,10 +137,17 @@
   (defun note-label (note)
     (caddr note))
 
+  (defun note-style (note)
+    (or (cadddr note) :filled))
+
   (defun note (x y radius note)
-    (svg
-      (circle :x x :y y :radius radius :fill *fg-color*)
-      (text (note-label note) :x x :y y :fill *bg-color*)))
+    (ecase (note-style note)
+      (:filled (svg
+                  (circle :x x :y y :radius radius :fill *fg-color* :stroke *bg-color*)
+                  (text (note-label note) :x x :y y :fill *bg-color*)))
+      (:dashed (svg
+                  (circle :x x :y y :radius radius :fill *bg-color* :stroke *fg-color* :stroke-width 2)
+                  (text (note-label note) :x x :y y :fill *fg-color*)))))
 
   (defun guitar-diagram (&key title (num-frets 5) (num-strings 6) notes)
     (let* ((note-radius 16)
@@ -182,11 +190,9 @@
                         collect (note x y note-radius note))))))))))
 
   (c:dump-output (s "/tmp/diagram.html")
-    (let ((*svg* s)
-          (*width* 280)
-          (*height* 400)
-          (notes '((5 0 "R")
-                   (4 2 "5")
-                   (3 2 "R")
-                   (2 1 "b3"))))
-      (compile-svg (guitar-diagram :title "A minor (open)" :num-frets 5 :notes notes)))))
+    (let ((*svg* s))
+      (diagram (:title "A minor (open)" :frets 5)
+        (5 0 "R" :dashed)
+        (4 2 "5")
+        (3 2 "R")
+        (2 1 "b3")))))
