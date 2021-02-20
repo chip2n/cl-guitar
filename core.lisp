@@ -72,8 +72,7 @@
                   (text (s &key (x 0) (y 0) fill)
                     `(list :text ,s ,x ,y ,fill))
                   (group ((&key (x 0) (y 0)) &body body)
-                    `(list :group (list :x ,x :y ,y) ,@body))
-                  )
+                    `(list :group (list :x ,x :y ,y) (list ,@body))))
          ,@(mapcar (lambda (form) `(push ,form ,cmds)) body)
          (nreverse ,cmds)))))
 
