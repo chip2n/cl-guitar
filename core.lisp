@@ -133,52 +133,53 @@
                               :height fret-height
                               :fill *fg-color*))))))
 
+  (defun note-label (note)
+    (caddr note))
+
+  (defun note (x y radius note)
+    (svg
+      (circle :x x :y y :radius radius :fill *fg-color*)
+      (text (note-label note) :x x :y y :fill *bg-color*)))
+
   (defun guitar-diagram (&key title (num-frets 5) (num-strings 6) notes)
     (let* ((note-radius 16)
-           (padding (+ (* note-radius 2) 8)))
-      (multiple-value-bind (open-notes fretted-notes)
-          (serapeum:partition (lambda (x) (eq (cadr x) 0)) notes)
-        (svg
-          ;; Draw background
-          (rect :width *width* :height *height* :fill *bg-color*)
+           (padding (+ (* note-radius 2) 8))
+           (nut-height 13.8647))
+      (flet ((calc-note-coords (note)
+               (let* ((string-index (car note))
+                      (fret-index (cadr note))
+                      (fret-space (/ *height* (float num-frets)))
+                      (x (* (- num-strings string-index)
+                            (/ *width* (float (- num-strings 1)))))
+                      (y (if (eq fret-index 0) ; handling open notes differently
+                             (/ padding 2)
+                             (- (* fret-index fret-space)
+                                (/ fret-space 2)))))
+                 `(,x ,y))))
+        (multiple-value-bind (open-notes fretted-notes)
+            (serapeum:partition (lambda (x) (eq (cadr x) 0)) notes)
+          (svg
+            ;; Draw background
+            (rect :width *width* :height *height* :fill *bg-color*)
 
-          ;; Draw title
-          (when title
-            (text title :x (/ *width* 2) :y (- *height* (/ padding 2)) :fill *fg-color*))
+            ;; Draw title
+            (when title
+              (text title :x (/ *width* 2) :y (- *height* (/ padding 2)) :fill *fg-color*))
 
-          (inset ((* padding 2) 0)
-            (loop for note in open-notes
-                  collect (let* ((string-index (car note))
-                                 (fret-index (cadr note))
-                                 (fret-space (/ *height* (float num-frets)))
-                                 (note-x (* (- num-strings string-index)
-                                            (/ *width* (float (- num-strings 1)))))
-                                 (note-y (/ padding 2))
-                                 (type :circle)
-                                 (note-label (caddr note)))
-                            (group (:x 0 :y 0)
-                                   (circle :x note-x :y note-y :radius note-radius :fill "#ff0000")
-                                   (text note-label :x note-x :y note-y :fill "#ffffff"))))
+            (inset ((* padding 2) 0)
+              (loop for note in open-notes
+                    for (x y) = (calc-note-coords note)
+                    collect (note x y note-radius note))
 
-            (inset (0 (* padding 2) :center)
-              (fretboard num-frets)
+              (inset (0 (* padding 2) :center)
+                (fretboard num-frets)
 
-              ;; TODO nut height constant
-              (inset (0 13.8647 :bottom)
+                ;; TODO nut height constant
+                (inset (0 nut-height :bottom)
 
-                (loop for note in fretted-notes
-                      collect (let* ((string-index (car note))
-                                     (fret-index (cadr note))
-                                     (fret-space (/ *height* (float num-frets)))
-                                     (note-x (* (- num-strings string-index)
-                                                (/ *width* (float (- num-strings 1)))))
-                                     (note-y (- (* fret-index fret-space)
-                                                (/ fret-space 2)))
-                                     (type :circle)
-                                     (note-label (caddr note)))
-                                (group (:x 0 :y 0)
-                                       (circle :x note-x :y note-y :radius note-radius :fill "#ff0000")
-                                       (text note-label :x note-x :y note-y :fill "#ffffff")))))))))))
+                  (loop for note in fretted-notes
+                        for (x y) = (calc-note-coords note)
+                        collect (note x y note-radius note))))))))))
 
   (c:dump-output (s "/tmp/diagram.html")
     (let ((*svg* s)
@@ -187,9 +188,5 @@
           (notes '((5 0 "R")
                    (4 2 "5")
                    (3 2 "R")
-                   (2 1 "b3")))
-          ;; (notes '((5 0 "R")
-          ;;          (5 1 "R")
-          ;;          (5 2 "R")))
-          )
+                   (2 1 "b3"))))
       (compile-svg (guitar-diagram :title "A minor (open)" :num-frets 5 :notes notes)))))
