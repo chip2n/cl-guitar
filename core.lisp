@@ -149,7 +149,17 @@
     (caddr note))
 
   (defun note-style (note)
-    (or (cadddr note) :filled))
+    (if (eq (cadr note) 'x)
+        :muted
+        (or (cadddr note) :filled)))
+
+  (defun note-string (note)
+    (car note))
+
+  (defun note-fret (note)
+    (if (eq (cadr note) 'x)
+        0
+        (cadr note)))
 
   (defun note (x y radius note)
     (ecase (note-style note)
@@ -169,8 +179,8 @@
            (padding (+ (* note-radius 2) 8))
            (nut-height 13.8647))
       (flet ((calc-note-coords (note)
-               (let* ((string-index (car note))
-                      (fret-index (cadr note))
+               (let* ((string-index (note-string note))
+                      (fret-index (note-fret note))
                       (fret-space (/ *height* (float num-frets)))
                       (x (* (- num-strings string-index)
                             (/ *width* (float (- num-strings 1)))))
@@ -180,7 +190,7 @@
                                 (/ fret-space 2)))))
                  `(,x ,y))))
         (multiple-value-bind (open-notes fretted-notes)
-            (serapeum:partition (lambda (x) (eq (cadr x) 0)) notes)
+            (serapeum:partition (lambda (x) (eq (note-fret x) 0)) notes)
           (svg
             ;; Draw background
             (rect :width *width* :height *height* :fill *bg-color*)
@@ -207,7 +217,7 @@
   (c:dump-output (s "/tmp/diagram.html")
     (let ((*svg* s))
       (diagram (:title "A minor (open)" :frets 5)
-        (1 0 "R" :muted)
+        (6 x)
         (5 0 "R" :dashed)
         (4 2 "5")
         (3 2 "R")
