@@ -2,11 +2,24 @@
 
 (defvar *svg* nil)
 (defparameter *bg-color* "#F9F5ED")
-(defparameter *fg-color* "#7B6B52")
-(defparameter *highlight-color* "#EB5757")
+(defparameter *fg-color* "#615440")
+(defparameter *highlight-color* "#FB4F4F")
 
 (defvar *width* 212)
 (defvar *height* 395)
+
+;; * Colors
+
+(defparameter *colors-alist*
+  '((:highlight . "#FB4F4F")
+    (:ref       . "#E7DBC5")
+    (:new       . "#529DC7")
+    (t          . "#615440")))
+
+(defun color-lookup (keyword)
+  (cdr (assoc keyword *colors-alist*)))
+
+;; * SVG generation
 
 (defun emit-svg (tree)
   (when tree
@@ -113,22 +126,31 @@
 ;; guitar specific stuff -------
 
 (progn
-  (defmacro diagram ((&key title frets) &body notes)
+  (defmacro diagram ((&key title frets (start 1) indicator) &body notes)
     `(let ((*svg* (or *svg* *standard-output*))
            (*width* 280)
            (*height* 400))
-       (compile-svg (guitar-diagram :title ,title :num-frets ,frets :notes ',notes))))
+       (compile-svg (guitar-diagram
+                     :title ,title
+                     :num-frets ,frets
+                     :start-fret ,start
+                     :fret-indicator ,indicator
+                     :notes ',notes))))
 
-  (defun fretboard (num-frets)
-    (let* ((nut-height 16)
+  (defun fretboard (num-frets &optional (draw-nut-p t))
+    (let* ((nut-height (if draw-nut-p 16 0))
            (string-width 2)
            (fret-height 1.54052)
            (num-strings 6))
       (svg
         ;; Draw the nut
-        (rect :width *width*
-              :height nut-height
-              :fill *fg-color*)
+        (if draw-nut-p
+            (rect :width *width*
+                  :height nut-height
+                  :fill *fg-color*)
+            (rect :width *width*
+                  :height 2
+                  :fill *fg-color*))
 
         (inset (0 nut-height :bottom)
 
@@ -150,15 +172,19 @@
     (caddr note))
 
   (defun note-style (note)
-    (if (eq (cadr note) 'x)
+    (if (note-muted-p note)
         :muted
         (or (cadddr note) :filled)))
 
   (defun note-string (note)
     (car note))
 
+  (defun note-muted-p (note)
+    (and (symbolp (cadr note))
+             (string= (symbol-name (cadr note)) "X")))
+
   (defun note-fret (note)
-    (if (eq (cadr note) 'x)
+    (if (note-muted-p note)
         0
         (cadr note)))
 
@@ -167,11 +193,7 @@
            (real-style (if (listp style)
                            (car style)
                            style))
-           (color (if (listp style)
-                      (case (cadr style)
-                        (:highlight *highlight-color*)
-                        (otherwise *fg-color*))
-                      *fg-color*)))
+           (color (color-lookup (if (listp style) (cadr style) t))))
       (ecase real-style
         (:filled (svg
                    (circle :x x :y y :radius radius :fill color :stroke *bg-color*)
@@ -187,13 +209,15 @@
                          (line :x1 0 :y1 (- 0 radius) :x2 0 :y2 (+ 0 radius) :stroke color :stroke-width 2)
                          (line :x1 (- 0 radius) :y1 0 :x2 (+ 0 radius) :y2 0 :stroke color :stroke-width 2)))))))
 
-  (defun guitar-diagram (&key title (num-frets 5) (num-strings 6) notes)
+  (defun guitar-diagram (&key title (num-frets 5) (num-strings 6) (start-fret 0) fret-indicator notes)
     (let* ((note-radius 16)
-           (padding (+ (* note-radius 2) 8))
-           (nut-height 16))
+           (padding (+ (* note-radius 2) 16))
+           (nut-height (if (= start-fret 1) 16 0)))
       (flet ((calc-note-coords (note)
                (let* ((string-index (note-string note))
-                      (fret-index (note-fret note))
+                      (fret-index (if (= (note-fret note) 0)
+                                      0
+                                      (+ (- (note-fret note) start-fret) 1)))
                       (fret-space (/ *height* (float num-frets)))
                       (x (* (- num-strings string-index)
                             (/ *width* (float (- num-strings 1)))))
@@ -212,13 +236,24 @@
             (when title
               (text title :x (/ *width* 2) :y (- *height* (/ padding 2)) :fill *fg-color*))
 
+            ;; Draw fret indicator
+            (when fret-indicator
+              (inset (0 (* padding 2))
+                (inset (0 nut-height :bottom)
+                  (when (> start-fret 0)
+                    (text (format nil "~afr" fret-indicator)
+                          :x (- *width* 16)
+                          :y (+ (* (- fret-indicator start-fret) (/ *height* (float num-frets)))
+                                (/ *height* (float num-frets) 2))
+                          :fill *fg-color*)))))
+
             (inset ((* padding 2) 0)
               (loop for note in open-notes
                     for (x y) = (calc-note-coords note)
                     collect (note x y note-radius note))
 
               (inset (0 (* padding 2) :center)
-                (fretboard num-frets)
+                (fretboard num-frets (= start-fret 1))
 
                 ;; TODO nut height constant
                 (inset (0 nut-height :bottom)
@@ -229,9 +264,11 @@
 
   (c:dump-output (s "/tmp/diagram.html")
     (let ((*svg* s))
-      (diagram (:title "A minor (open)" :frets 5)
-        (6 x)
-        (5 0 "R" :dashed)
-        (4 2 "5")
-        (3 2 "R")
-        (2 1 "b3")))))
+      (diagram (:title "A minor arpeggio" :frets 5 :start 4 :indicator 5)
+        (6 5 "R" (:filled :highlight))
+        (6 8 "b3")
+        (5 7 "5")
+        (4 7 "R" (:filled :highlight))
+        (3 5 "b3")
+        (2 5 "5")
+        (1 5 "R" (:filled :highlight))))))
