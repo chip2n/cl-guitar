@@ -1,8 +1,9 @@
 (in-package #:cl-guitar)
 
 (defvar *svg* nil)
-(defvar *bg-color* "#F9F5ED")
-(defvar *fg-color* "#7B6B52")
+(defparameter *bg-color* "#F9F5ED")
+(defparameter *fg-color* "#7B6B52")
+(defparameter *highlight-color* "#EB5757")
 
 (defvar *width* 212)
 (defvar *height* 395)
@@ -162,20 +163,29 @@
         (cadr note)))
 
   (defun note (x y radius note)
-    (ecase (note-style note)
-      (:filled (svg
-                 (circle :x x :y y :radius radius :fill *fg-color* :stroke *bg-color*)
-                 (text (note-label note) :x x :y y :fill *bg-color*)))
-      (:stroked (svg
-                  (circle :x x :y y :radius radius :fill *bg-color* :stroke *fg-color* :stroke-width 2)
-                  (text (note-label note) :x x :y y :fill *fg-color*)))
-      (:dashed (svg
-                 (circle :x x :y y :radius radius :fill *bg-color* :stroke *fg-color* :stroke-width 2 :dashedp t)
-                 (text (note-label note) :x x :y y :fill *fg-color*)))
-      (:muted (svg
-                (group (:x x :y y :rotation 45)
-                       (line :x1 0 :y1 (- 0 radius) :x2 0 :y2 (+ 0 radius) :stroke *fg-color* :stroke-width 2)
-                       (line :x1 (- 0 radius) :y1 0 :x2 (+ 0 radius) :y2 0 :stroke *fg-color* :stroke-width 2))))))
+    (let* ((style (note-style note))
+           (real-style (if (listp style)
+                           (car style)
+                           style))
+           (color (if (listp style)
+                      (case (cadr style)
+                        (:highlight *highlight-color*)
+                        (otherwise *fg-color*))
+                      *fg-color*)))
+      (ecase real-style
+        (:filled (svg
+                   (circle :x x :y y :radius radius :fill color :stroke *bg-color*)
+                   (text (note-label note) :x x :y y :fill *bg-color*)))
+        (:stroked (svg
+                    (circle :x x :y y :radius radius :fill *bg-color* :stroke color :stroke-width 2)
+                    (text (note-label note) :x x :y y :fill color)))
+        (:dashed (svg
+                   (circle :x x :y y :radius radius :fill *bg-color* :stroke color :stroke-width 2 :dashedp t)
+                   (text (note-label note) :x x :y y :fill color)))
+        (:muted (svg
+                  (group (:x x :y y :rotation 45)
+                         (line :x1 0 :y1 (- 0 radius) :x2 0 :y2 (+ 0 radius) :stroke color :stroke-width 2)
+                         (line :x1 (- 0 radius) :y1 0 :x2 (+ 0 radius) :y2 0 :stroke color :stroke-width 2)))))))
 
   (defun guitar-diagram (&key title (num-frets 5) (num-strings 6) notes)
     (let* ((note-radius 16)
