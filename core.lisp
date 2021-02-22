@@ -1,18 +1,17 @@
 (in-package #:cl-guitar)
 
 (defvar *svg* nil)
+(defparameter *width* 212)
+(defparameter *height* 395)
+
 (defparameter *bg-color* "#F9F5ED")
 (defparameter *fg-color* "#615440")
-(defparameter *highlight-color* "#FB4F4F")
-
-(defvar *width* 212)
-(defvar *height* 395)
 
 ;; * Colors
 
 (defparameter *colors-alist*
   '((:highlight . "#FB4F4F")
-    (:ref       . "#E7DBC5")
+    (:ref       . "#E1D0B1")
     (:new       . "#529DC7")
     (t          . "#615440")))
 
@@ -56,11 +55,11 @@
            :stroke ,stroke
            :stroke-width ,stroke-width)))
 
-(defun text->svg (s x y fill)
+(defun text->svg (s x y fill size)
   `(:text (:x ,x
            :y ,y
            :font-family "Noto Sans"
-           :font-size 18
+           :font-size ,size
            :font-weight "bold"
            :text-anchor "middle"
            :fill ,fill
@@ -104,8 +103,8 @@
                     `(list :circle ,x ,y ,radius ,fill ,stroke ,stroke-width ,dashedp))
                   (line (&key (x1 0) (y1 0) (x2 0) (y2 0) stroke (stroke-width 1))
                     `(list :line ,x1 ,y1 ,x2 ,y2 ,stroke ,stroke-width))
-                  (text (s &key (x 0) (y 0) fill)
-                    `(list :text ,s ,x ,y ,fill))
+                  (text (s &key (x 0) (y 0) fill (size 18))
+                    `(list :text ,s ,x ,y ,fill ,size))
                   (group ((&key (x 0) (y 0) (rotation 0)) &body body)
                     `(list :group (list :x ,x :y ,y :rotation ,rotation) (list ,@body))))
          ,@(mapcar (lambda (form) `(push ,form ,cmds)) body)
@@ -196,13 +195,13 @@
     (ecase real-style
       (:filled (svg
                  (circle :x x :y y :radius radius :fill color :stroke *bg-color*)
-                 (text (note-label note) :x x :y y :fill *bg-color*)))
+                 (text (note-label note) :x x :y y :fill *bg-color* :size 16)))
       (:stroked (svg
                   (circle :x x :y y :radius radius :fill *bg-color* :stroke color :stroke-width 2)
-                  (text (note-label note) :x x :y y :fill color)))
+                  (text (note-label note) :x x :y y :fill color :size 16)))
       (:dashed (svg
                  (circle :x x :y y :radius radius :fill *bg-color* :stroke color :stroke-width 2 :dashedp t)
-                 (text (note-label note) :x x :y y :fill color)))
+                 (text (note-label note) :x x :y y :fill color :size 16)))
       (:muted (svg
                 (group (:x x :y y :rotation 45)
                        (line :x1 0 :y1 (- 0 radius) :x2 0 :y2 (+ 0 radius) :stroke color :stroke-width 2)
