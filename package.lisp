@@ -1,4 +1,3 @@
-(uiop:define-package #:cl-guitar
-  (:nicknames #:guitar)
-  (:use #:cl #:arrow-macros)
-  (:export #:*svg* #:diagram))
+(uiop:define-package #:guitar
+  (:use #:cl #:savage #:arrow-macros)
+  (:export #:diagram))
